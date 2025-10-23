@@ -13,8 +13,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
 
   const [room, players, rounds] = await Promise.all([
     prisma.rooms.findUnique({
-      where: { id: roomId },
-      select: { id: true, code: true, status: true, created_at: true },
+      where: { id: roomId }
     }),
     prisma.room_players.findMany({
       where: { room_id: roomId },

@@ -38,6 +38,7 @@ model categories {
   icon_url    String?
   created_at  DateTime    @default(now()) @db.Timestamptz(6)
   questions   questions[]
+  rooms       rooms[]     
 }
 
 model players {
@@ -121,6 +122,12 @@ model rooms {
   ended_at      DateTime?      @db.Timestamptz(6)
   room_players  room_players[]
   room_rounds   room_rounds[]
+  category_id   BigInt?
+  total_questions Int?         @db.SmallInt
+  current_index   Int          @default(0) @db.SmallInt
+   
+
+  categories    categories?    @relation(fields: [category_id], references: [id], onDelete: SetNull)
   admins        admins?        @relation(fields: [host_admin_id], references: [id], onUpdate: NoAction)
 
   @@index([status], map: "idx_rooms_status")
