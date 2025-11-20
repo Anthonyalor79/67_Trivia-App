@@ -77,7 +77,7 @@ export default function NewRoomPage() {
               ))}
             </select>
             <p className="text-xs text-white/70 mt-1">
-              If left blank, questions can be from any category.
+              If left blank, questions can be from any category
             </p>
           </div>
 
