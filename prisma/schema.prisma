@@ -23,7 +23,6 @@ model Admin {
 // --------------------- Rooms --------------------------
 model Room {
   id        Int      @id @default(autoincrement())
-  code      String
   adminId   Int
   admin     Admin    @relation(fields: [adminId], references: [id])
   categories RoomCategory[]
@@ -95,6 +94,7 @@ model Session {
   startTime  DateTime  @map("start_time")
   endTime    DateTime  @map("end_time")
   roomId     Int
+  code      String
 
   room       Room      @relation(fields: [roomId], references: [id])
   players    Player[]
