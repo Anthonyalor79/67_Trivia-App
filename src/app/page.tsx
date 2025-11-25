@@ -63,7 +63,7 @@ export default function LandingPage() {
             whileTap={{ scale: 0.95 }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
             className="bg-pink-600 text-white font-semibold font-mono px-8 py-3 rounded-lg shadow-lg hover:bg-pink-500 shadow-[0_0_12px_rgba(219,39,119,0.6)]"
-            onClick={() => router.push("/rooms")}
+            onClick={() => router.push("/login")}
           >
             Start Game
           </motion.button>
