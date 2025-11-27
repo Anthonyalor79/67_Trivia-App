@@ -58,6 +58,7 @@ model Trivia {
 
   category    Category    @relation(fields: [categoryId], references: [id])
   questions   Question[]
+  sessions   Session[]
 }
 
 // -------------------- Questions -----------------------
@@ -95,6 +96,10 @@ model Session {
   endTime    DateTime  @map("end_time")
   roomId     Int
   code      String
+
+  // NEW: links a session directly to a trivia set
+  triviaId   Int
+  trivia     Trivia    @relation(fields: [triviaId], references: [id])
 
   room       Room      @relation(fields: [roomId], references: [id])
   players    Player[]
