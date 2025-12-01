@@ -5,65 +5,61 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
 type Category = { id: number; name: string };
-type TriviaSet = {
-  id: number;
-  name: string;
-  questionCount: number;
-};
+type Trivia = { id: number; name: string; categoryId: number };
 
 export default function NewRoomPage() {
   const router = useRouter();
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [triviaSets, setTriviaSets] = useState<TriviaSet[]>([]);
+  const [cats, setCats] = useState<Category[]>([]);
+  const [triviaSets, setTriviaSets] = useState<Trivia[]>([]);
 
-  const [selectedCategory, setSelectedCategory] = useState<number | "">("");
-  const [selectedTrivia, setSelectedTrivia] = useState<number | "">("");
+  const [categoryId, setCategoryId] = useState<number | "">("");
+  const [triviaId, setTriviaId] = useState<number | "">("");
 
   const [creating, setCreating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Load categories on mount
+  // Load categories on page load
   useEffect(() => {
     fetch("/api/categories")
       .then((r) => r.json())
-      .then(setCategories)
-      .catch(() => setCategories([]));
+      .then(setCats)
+      .catch(() => setCats([]));
   }, []);
 
-  // Load trivia sets when category is selected
+  // Load trivia when category changes
   useEffect(() => {
-    if (typeof selectedCategory !== "number") {
+    if (!categoryId) {
       setTriviaSets([]);
-      setSelectedTrivia("");
+      setTriviaId("");
       return;
     }
 
-    fetch(`/api/trivia/by-category/${selectedCategory}`)
+    fetch(`/api/trivia?categoryId=${categoryId}`)
       .then((r) => r.json())
-      .then(setTriviaSets)
+      .then((data) => {
+        setTriviaSets(data);
+        setTriviaId("");
+      })
       .catch(() => setTriviaSets([]));
-  }, [selectedCategory]);
+  }, [categoryId]);
 
-  async function createRoom() {
-    if (!selectedCategory || !selectedTrivia) {
-      setErr("Please choose a category and a trivia set.");
-      return;
-    }
-
-    setCreating(true);
+  async function create() {
     setErr(null);
+    setCreating(true);
 
     try {
       const res = await fetch("/api/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          triviaId: selectedTrivia, // this determines the question pack
+          categoryId: typeof categoryId === "number" ? categoryId : undefined,
+          triviaId: typeof triviaId === "number" ? triviaId : undefined,
         }),
       });
 
       const data = await res.json();
+
       if (!res.ok) throw new Error(data.error || "Failed to create room");
 
       router.push(`/rooms/${data.id}`);
@@ -75,40 +71,41 @@ export default function NewRoomPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-black via-indigo-900 to-purple-900 text-white flex items-center justify-center px-6">
+    <main className="flex flex-col items-center justify-center min-h-screen px-6 text-white bg-gradient-to-b from-black via-indigo-900 to-purple-900">
+
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-lg rounded-3xl bg-white/10 border border-white/15 p-6 sm:p-8 shadow-2xl backdrop-blur"
+        className="w-full max-w-md bg-gray-900/60 border border-cyan-700/50 rounded-2xl p-8 shadow-xl backdrop-blur"
       >
-        <h1 className="text-3xl font-extrabold mb-6 text-center font-mono text-cyan-400">
+        <h1 className="text-3xl font-extrabold font-mono text-center text-cyan-400 mb-6 drop-shadow-[0_2px_6px_rgba(6,182,212,0.6)]">
           Create New Room
         </h1>
 
         {err && (
-          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 font-mono">
+          <div className="mb-4 rounded-lg border border-red-500/40 bg-red-900/40 px-4 py-2 text-sm text-red-200 font-mono">
             {err}
           </div>
         )}
 
         <div className="space-y-6">
 
-          {/* CATEGORY SELECT */}
+          {/* Category Dropdown */}
           <div>
-            <label className="block text-sm mb-1 text-white/80 font-mono">
+            <label className="block text-sm mb-1 text-cyan-300 font-mono">
               Category
             </label>
             <select
-              value={String(selectedCategory)}
+              value={categoryId}
               onChange={(e) =>
-                setSelectedCategory(
+                setCategoryId(
                   e.target.value === "" ? "" : Number(e.target.value)
                 )
               }
-              className="w-full rounded-xl bg-gray-800 text-white px-3 py-2 border border-gray-600 focus:border-cyan-500 outline-none"
+              className="w-full rounded-xl bg-black/40 border border-cyan-700/40 px-3 py-2 outline-none text-white font-mono focus:border-cyan-400 transition"
             >
-              <option value="">Select category…</option>
-              {categories.map((c) => (
+              <option value="">Select a Category</option>
+              {cats.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
@@ -116,42 +113,50 @@ export default function NewRoomPage() {
             </select>
           </div>
 
-          {/* TRIVIA SET SELECT — Only visible after category */}
-          {triviaSets.length > 0 && (
-            <div>
-              <label className="block text-sm mb-1 text-white/80 font-mono">
-                Trivia Set
-              </label>
-              <select
-                value={String(selectedTrivia)}
-                onChange={(e) =>
-                  setSelectedTrivia(
-                    e.target.value === "" ? "" : Number(e.target.value)
-                  )
-                }
-                className="w-full rounded-xl bg-gray-800 text-white px-3 py-2 border border-gray-600 focus:border-cyan-500 outline-none"
-              >
-                <option value="">Select trivia set…</option>
-                {triviaSets.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.questionCount} questions)
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Trivia Dropdown */}
+          <div>
+            <label className="block text-sm mb-1 text-cyan-300 font-mono">
+              Trivia Set
+            </label>
+            <select
+              value={triviaId}
+              disabled={!categoryId}
+              onChange={(e) =>
+                setTriviaId(
+                  e.target.value === "" ? "" : Number(e.target.value)
+                )
+              }
+              className="w-full rounded-xl bg-black/40 border border-cyan-700/40 px-3 py-2 outline-none text-white font-mono focus:border-cyan-400 transition disabled:opacity-50"
+            >
+              <option value="">Select a Trivia Set</option>
+              {triviaSets.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          {/* CREATE ROOM BUTTON */}
+          {/* Create Room */}
           <button
-            onClick={createRoom}
-            disabled={creating}
-            className="w-full rounded-2xl px-5 py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold font-mono transition disabled:opacity-60"
+            onClick={create}
+            disabled={!triviaId || creating}
+            className="w-full rounded-xl px-5 py-3 bg-pink-600 text-white font-bold font-mono hover:bg-pink-500 transition disabled:opacity-50 shadow-lg shadow-[0_0_12px_rgba(219,39,119,0.5)]"
           >
             {creating ? "Creating…" : "Create Room"}
           </button>
 
+          <div className="text-center">
+            <a
+              href="/rooms"
+              className="text-cyan-300 hover:text-cyan-400 font-mono underline"
+            >
+              ← Back to Rooms
+            </a>
+          </div>
         </div>
       </motion.div>
+
     </main>
   );
 }

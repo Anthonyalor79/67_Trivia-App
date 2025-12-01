@@ -1,91 +1,104 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-/**
- * DELETE /api/rooms/:id
- *
- * Deletes:
- * - RoomCategory join rows
- * - Sessions belonging to the room
- * - Players in the session
- * - Winners linked to each player
- * - Finally, the Room itself
- */
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
+/** ------------------ GET /api/rooms/:id ------------------ **/
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
-  const roomId = Number(params.id);
+  const { id } = await context.params;
+  const roomId = Number(id);
 
   if (isNaN(roomId)) {
-    return NextResponse.json(
-      { error: "Invalid room ID" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid room ID" }, { status: 400 });
   }
 
   try {
-    // Find the room (ensure it exists)
-    const room = await prisma.room.findUnique({
-      where: { id: roomId },
+    const session = await prisma.session.findFirst({
+      where: { roomId },
       include: {
-        sessions: true,
-        categories: true,
-      },
-    });
-
-    if (!room) {
-      return NextResponse.json(
-        { error: "Room not found" },
-        { status: 404 }
-      );
-    }
-
-    // Delete Winners → Players → Sessions
-    await prisma.winner.deleteMany({
-      where: {
-        player: {
-          session: {
-            roomId,
+        room: true,
+        trivia: {
+          include: {
+            questions: {
+              include: { options: true },
+            },
           },
         },
       },
     });
 
-    await prisma.player.deleteMany({
-      where: {
-        session: {
-          roomId,
-        },
+    if (!session) {
+      return NextResponse.json({ error: "Room or session not found" }, { status: 404 });
+    }
+
+    const questions = session.trivia.questions.map((q) => ({
+      id: q.id,
+      question: q.actualQuestion,
+      options: q.options.map((o) => ({
+        id: o.id,
+        text: o.text,
+      })),
+    }));
+
+    return NextResponse.json({
+      roomId,
+      code: session.code,
+      status: "lobby",
+      trivia: {
+        id: session.trivia.id,
+        name: session.trivia.name,
       },
+      questions,
+    });
+  } catch (err) {
+    console.error("ROOM FETCH ERROR:", err);
+    return NextResponse.json({ error: "Failed to load room" }, { status: 500 });
+  }
+}
+
+/** ------------------ DELETE /api/rooms/:id ------------------ **/
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
+  const roomId = Number(id);
+
+  if (isNaN(roomId)) {
+    return NextResponse.json({ error: "Invalid room ID" }, { status: 400 });
+  }
+
+  try {
+    const room = await prisma.room.findUnique({ where: { id: roomId } });
+
+    if (!room) {
+      return NextResponse.json({ error: "Room not found" }, { status: 404 });
+    }
+
+    await prisma.winner.deleteMany({
+      where: { player: { session: { roomId } } },
+    });
+
+    await prisma.player.deleteMany({
+      where: { session: { roomId } },
     });
 
     await prisma.session.deleteMany({
-      where: {
-        roomId,
-      },
+      where: { roomId },
     });
 
-    // Delete RoomCategory join entries
     await prisma.roomCategory.deleteMany({
-      where: {
-        roomId,
-      },
+      where: { roomId },
     });
 
-    // Finally delete the room
-    await prisma.room.delete({
-      where: { id: roomId },
-    });
+    await prisma.room.delete({ where: { id: roomId } });
 
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("DELETE ROOM ERROR:", err);
-    return NextResponse.json(
-      { error: "Failed to delete room" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to delete room" }, { status: 500 });
   }
 }

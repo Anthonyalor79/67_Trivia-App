@@ -92,8 +92,8 @@ model Answer {
 // --------------------- Sessions -----------------------
 model Session {
   id         Int       @id @default(autoincrement())
-  startTime  DateTime  @map("start_time")
-  endTime    DateTime  @map("end_time")
+  startTime  DateTime?  @map("start_time")
+  endTime    DateTime?  @map("end_time")
   roomId     Int
   code      String
 
