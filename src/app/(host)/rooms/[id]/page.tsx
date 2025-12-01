@@ -1,24 +1,60 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 
-// testing section
 type Player = { id: string; name: string };
 
 export default function HostPage() {
-  const { roomId } = useParams<{ roomId: string }>();
+  const { id } = useParams<{ id: string }>();
 
-  // testing section / requires data fetching from database
-  const [room, setRoom] = useState({
-    code: "456",
-    status: "lobby",
-    created: new Date(),
-  });
+  const [loading, setLoading] = useState(true);
+  const [roomCode, setRoomCode] = useState<string>("");
   const [players, setPlayers] = useState<Player[]>([]);
-  const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
-  // --- testing section
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [currentIndex, setCurrentIndex] = useState<number>(-1);
+  const [status, setStatus] = useState<"lobby" | "live" | "ended">("lobby");
+
+  // Derived state: current question object
+  const currentQuestion =
+    currentIndex >= 0 && currentIndex < questions.length
+      ? questions[currentIndex]
+      : null;
+
+  /** Load room + questions from the backend */
+  useEffect(() => {
+    async function loadRoom() {
+      try {
+        const res = await fetch(`/api/rooms/${id}`);
+        const data = await res.json();
+
+        setRoomCode(data.code);
+        setQuestions(data.questions); // list of { id, question, options }
+        setLoading(false);
+      } catch (err) {
+        console.error("Failed to load room:", err);
+      }
+    }
+
+    loadRoom();
+  }, [id]);
+
+  /** Host starts next question */
+  function handleNextQuestion() {
+    if (status === "lobby") {
+      setStatus("live");
+      setCurrentIndex(0);
+      return;
+    }
+
+    if (currentIndex + 1 < questions.length) {
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      setStatus("ended");
+    }
+  }
+
 
 
   return (
@@ -32,7 +68,7 @@ export default function HostPage() {
 
 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
   <h1 className="text-3xl font-extrabold font-mono text-cyan-400 drop-shadow-[0_2px_4px_rgba(6,182,212,0.5)]">
-    Host — Room {room.code}
+    Host — Room {roomCode}
   </h1>
   <div className="flex gap-3">
     <button
@@ -59,17 +95,11 @@ export default function HostPage() {
       <p className="text-gray-400">
         Code:{" "}
         <strong className="text-xl text-white font-bold ml-1">
-          {room.code}
+          {roomCode}
         </strong>
       </p>
       <p className="text-gray-400 flex items-center gap-2">
-        Status: <StatusBadge status={room.status} />
-      </p>
-      <p className="text-gray-400">
-        Created:{" "}
-        <span className="text-gray-300">
-          {room.created.toLocaleString()}
-        </span>
+        Status: <StatusBadge status={status} />
       </p>
     </div>
   </div>
@@ -100,7 +130,7 @@ export default function HostPage() {
   </h2>
   <div className="font-mono text-sm text-gray-400">
     {currentQuestion ? (
-      <p className="text-gray-200">{currentQuestion}</p>
+      <p className="text-gray-200">{currentQuestion?.question}</p>
     ) : (
       <p>
         No round yet. Click{" "}
