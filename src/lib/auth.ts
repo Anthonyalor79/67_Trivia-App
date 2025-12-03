@@ -14,7 +14,7 @@ if (!JWT_SECRET) {
 // ------------------------------------------------------------
 export function signToken(adminId: number) {
   return jwt.sign({ adminId }, JWT_SECRET, {
-    expiresIn: "7d",
+    expiresIn: "1hr",
   });
 }
 
