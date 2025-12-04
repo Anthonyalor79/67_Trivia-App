@@ -47,7 +47,9 @@ export async function GET(
     return NextResponse.json({
       roomId,
       code: session.code,
-      status: "lobby",
+      gameStarted: session.startTime && !session.endTime ? true : false,
+      gameDeleted: session.endTime ? true : false,
+      questionIndex: session.currentQuestionIndex,
       trivia: {
         id: session.trivia.id,
         name: session.trivia.name,

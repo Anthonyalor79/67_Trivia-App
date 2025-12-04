@@ -13,6 +13,7 @@ export default function HostPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
+  const [gameStarted, setGameStarted] = useState<boolean>(false);
 
   const currentQuestion =
     currentIndex >= 0 && currentIndex < questions.length
@@ -32,6 +33,10 @@ export default function HostPage() {
         setQuestions(data.questions);
         setPlayers(data.players);
         setLoading(false);
+        if(data.gameStarted) {
+          setGameStarted(true);
+          setCurrentIndex(data.questionIndex);
+        }
       } catch (err) {
         console.error("Failed to load room:", err);
       }
@@ -43,13 +48,20 @@ export default function HostPage() {
   // ------------------------------------------------------
   // Host starts the round – move from lobby to question 1
   // ------------------------------------------------------
-  function handleStartRound() {
+  async function handleStartRound() {
     if (questions.length === 0) {
       alert("This trivia set has no questions.");
       return;
     }
+    try {
+      const res = await fetch(`/api/rooms/${id}/startGame`, {
+        method: "POST",
+      });
 
-    setCurrentIndex(0); // round starts → first question loads
+      setGameStarted(true);
+    } catch (err) {
+      console.error("Failed to load room:", err);
+    }
   }
 
   // ------------------------------------------------------
@@ -101,11 +113,12 @@ export default function HostPage() {
               </button>
 
               {/* Only show Start Round BEFORE the first question */}
-              {currentIndex === -1 && (
+              { !gameStarted && (
                 <button
                   type="button"
                   onClick={handleStartRound}
                   className="rounded-lg px-5 py-2 bg-pink-600 text-white font-semibold font-mono hover:bg-pink-500 transition shadow-lg shadow-[0_0_12px_rgba(219,39,119,0.6)]"
+                  disabled={gameStarted}
                 >
                   Start Round
                 </button>
@@ -148,7 +161,7 @@ export default function HostPage() {
           {/* ---------------------------------------------------- */}
           {/* BEFORE ROUND STARTS → show only instruction message  */}
           {/* ---------------------------------------------------- */}
-          {currentIndex === -1 ? (
+          {!gameStarted ? (
             <div className="mt-10 text-center">
               <p className="text-lg font-mono text-gray-300">
                 Click <strong className="text-pink-400">Start Round</strong> to begin.

@@ -96,6 +96,7 @@ model Session {
   endTime    DateTime?  @map("end_time")
   roomId     Int
   code      String
+  currentQuestionIndex Int @default(0)
 
   // NEW: links a session directly to a trivia set
   triviaId   Int
@@ -110,6 +111,7 @@ model Player {
   id        Int       @id @default(autoincrement())
   username  String
   sessionId Int
+  score     Int       @default(0)
 
   session   Session   @relation(fields: [sessionId], references: [id])
   winners   Winner[]   // <-- one-to-many, not one-to-one
