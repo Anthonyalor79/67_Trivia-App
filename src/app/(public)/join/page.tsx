@@ -126,7 +126,7 @@ export default function JoinPage() {
                   id="room"
                   inputMode="numeric"
                   pattern="\d*"
-                  className="flex-1 rounded-lg bg-gray-800 text-white placeholder-gray-500 px-3 py-2 outline-none border border-gray-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                  className="flex-1 rounded-lg bg-gray-800 text-white placeholder-gray-500 px-3 py-2 outline-none border border-gray-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transform transition-transform duration-200 hover:scale-105"
                   placeholder="e.g. 123"
                   value={roomId}
                   onChange={(e) => {
@@ -158,7 +158,7 @@ export default function JoinPage() {
                 <input
                   id="roomCode"
                   pattern="[A-Za-z0-9]*"
-                  className="flex-1 rounded-lg bg-gray-800 text-white placeholder-gray-500 px-3 py-2 outline-none border border-gray-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                  className="flex-1 rounded-lg bg-gray-800 text-white placeholder-gray-500 px-3 py-2 outline-none border border-gray-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transform transition-transform duration-200 hover:scale-105"
                   placeholder="e.g. A1B2C3"
                   value={roomCode}
                   onChange={(e) => {
@@ -187,7 +187,7 @@ export default function JoinPage() {
               </label>
               <input
                 id="name"
-                className="w-full rounded-lg bg-gray-800 text-white placeholder-gray-500 px-3 py-2 outline-none border border-gray-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                className="w-full rounded-lg bg-gray-800 text-white placeholder-gray-500 px-3 py-2 outline-none border border-gray-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transform transition-transform duration-200 hover:scale-105"
                 placeholder="Your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -199,7 +199,7 @@ export default function JoinPage() {
               type="button"
               onClick={join}
               disabled={joining}
-              className="w-full rounded-lg px-5 py-3 bg-pink-600 text-white font-semibold font-mono hover:bg-pink-500 transition disabled:opacity-60 shadow-lg shadow-[0_0_12px_rgba(219,39,119,0.6)]"
+              className="w-full rounded-lg px-5 py-3 bg-pink-600 text-white font-semibold font-mono hover:bg-pink-500 transition disabled:opacity-60 shadow-lg shadow-[0_0_12px_rgba(219,39,119,0.6)] transform transition-transform duration-200 hover:scale-105"
             >
               {joining ? "Joining…" : "Join Game"}
             </button>
