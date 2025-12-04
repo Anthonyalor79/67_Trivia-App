@@ -69,7 +69,7 @@ export default function HostDashboard({
     <main className="flex flex-col items-center justify-center min-h-screen px-6 text-white bg-gradient-to-b from-black via-indigo-900 to-purple-900">
 
       {/* Header */}
-      <section className="max-w-6xl mx-auto px-6 pt-12 pb-6 flex items-center justify-between">
+      <section className="max-w-6xl mx-auto px-6 pt-12 pb-6 flex gap-3 items-center justify-between">
         <motion.h1
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}

@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Bitcount+Prop+Single:wght@400;700&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -23,4 +24,42 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+@keyframes wave {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-40px); /* how high the bounce is */
+  }
+}
+
+@keyframes neonFlicker {
+  0%, 100% {
+    opacity: 1;
+  }
+  10% {
+    opacity: 0.6;
+  }
+  20% {
+    opacity: 1;
+  }
+  30% {
+    opacity: 0.4;
+  }
+  40% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.font-bitcount {
+  font-family: "Bitcount Prop Single", system-ui, sans-serif;
+}
+
+.font-greatvibes {
+  font-family: "Great Vibes", cursive;
 }
