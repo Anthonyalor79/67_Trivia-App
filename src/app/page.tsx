@@ -1,9 +1,8 @@
-
 "use client";
 
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import Image from "next/image"; 
+
 
 // Animation variants 
 const containerVariants = {
@@ -20,15 +19,16 @@ const itemVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0 },
 };
--0
+
+
+
+const letters = "TRIVIA".split("");
+
 export default function LandingPage() {
   const router = useRouter();
 
   return (
-  
-         <main className="flex flex-col items-center justify-center min-h-screen px-6 text-white bg-gradient-to-b from-black via-indigo-900 to-purple-900">
-      
-
+    <main className="flex flex-col items-center justify-center min-h-screen px-6 text-white bg-gradient-to-b from-black via-indigo-900 to-purple-900">
       <motion.div
         className="flex flex-col items-center justify-center"
         variants={containerVariants}
@@ -37,15 +37,43 @@ export default function LandingPage() {
       >
         <motion.div variants={itemVariants}>
           <h1 className="sr-only">Tap Tap Trivia</h1>
-          
-          <Image
-            src="/trivia.png" //Main logo from main page, centered and saved in /public
-            alt="Tap Tap Trivia Logo"
-            width={400}  
-            height={150} 
-            priority 
-            className="drop-shadow-[0_2px_4px_rgba(6,182,212,0.5)]"
-          />
+
+          <div className="flex flex-col items-center mt-10">
+            {/* TRIVIA */}
+            <div
+              className="
+                flex gap-2
+                text-8xl sm:text-9xl tracking-[0.05em]
+                font-bitcount
+                text-cyan-300
+                drop-shadow-[0_0_25px_rgba(34,211,238,0.9)]
+              "
+            >
+              {letters.map((ch, i) => (
+                <span
+                  key={i}
+                  className="inline-block animate-[wave_1.2s_ease-in-out_infinite]"
+                  style={{ animationDelay: `${i * 0.1}s` }} // wave offset per letter
+                >
+                  {ch}
+                </span>
+              ))}
+            </div>
+
+            {/* night */}
+            <span
+              className={`
+                
+                mt-3 text-4xl sm:text-5xl italic
+                font-greatvibes
+                text-pink-500
+                drop-shadow-[0_0_20px_rgba(236,72,153,0.95)]
+                animate-[neonFlicker_1.8s_ease-in-out_infinite]
+              `}
+            >
+              Night
+            </span>
+          </div>
         </motion.div>
 
         <motion.p
@@ -54,6 +82,7 @@ export default function LandingPage() {
         >
           Challenge your friends and test your knowledge in real time!
         </motion.p>
+
         <motion.div
           variants={itemVariants}
           className="flex flex-col sm:flex-row gap-4"
@@ -67,7 +96,7 @@ export default function LandingPage() {
           >
             Start Game
           </motion.button>
- 
+
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -80,8 +109,8 @@ export default function LandingPage() {
         </motion.div>
       </motion.div>
 
-      <footer className="absolute bottom-6 text-gray-400 text-sm font-mono"> 
-        © {new Date().getFullYear()} Tap Tap Trivia 
+      <footer className="absolute bottom-6 text-gray-400 text-sm font-mono">
+        © {new Date().getFullYear()} Tap Tap Trivia
       </footer>
     </main>
   );
