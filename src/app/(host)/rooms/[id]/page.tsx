@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
-
-type Player = { id: string; name: string };
+import { Player } from "@prisma/client";
 
 export default function HostPage() {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +30,7 @@ export default function HostPage() {
 
         setRoomCode(data.code);
         setQuestions(data.questions);
+        setPlayers(data.players);
         setLoading(false);
       } catch (err) {
         console.error("Failed to load room:", err);
@@ -89,7 +89,7 @@ export default function HostPage() {
           {/* ---------------------------------------------------- */}
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
             <h1 className="text-3xl font-extrabold font-mono text-cyan-400 drop-shadow-[0_2px_4px_rgba(6,182,212,0.5)]">
-              Host — Room {roomCode}
+              Host — Room {id}
             </h1>
 
             <div className="flex gap-3">
@@ -133,14 +133,14 @@ export default function HostPage() {
               <h2 className="font-semibold mb-3 font-mono text-gray-300">
                 Players
               </h2>
-              {players.length === 0 ? (
-                <p className="text-gray-400 font-mono text-sm">No players yet...</p>
-              ) : (
+             {players && players.length > 0 ? (
                 <ul className="font-mono text-sm text-gray-300 divide-y divide-gray-700">
                   {players.map((p) => (
-                    <li key={p.id} className="py-1">{p.name}</li>
+                    <li key={p.id} className="py-1">{p.username}</li>
                   ))}
                 </ul>
+              ) : (
+                <p className="text-gray-400 font-mono text-sm">No players yet...</p>
               )}
             </div>
           </div>
