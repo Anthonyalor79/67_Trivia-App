@@ -10,6 +10,7 @@ export default function JoinPage() {
   const params = useSearchParams();
 
   const [roomId, setRoomId] = useState("");
+  const [roomCode, setRoomCode] = useState("");
   const [name, setName] = useState("");
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +44,11 @@ export default function JoinPage() {
       const res = await fetch(`/api/rooms/${roomId}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName: name.trim() }),
+        body: JSON.stringify({ 
+          displayName: name.trim(),
+          roomId: Number(roomId.trim()),
+          roomCode: roomCode.trim(),
+         }),
       });
       const data = await res.json();
       if (!res.ok)
@@ -51,7 +56,7 @@ export default function JoinPage() {
           typeof data?.error === "string" ? data.error : "Failed to join"
         );
       sessionStorage.setItem("playerId", data.playerId);
-      router.push(`/play/${roomId}`);
+      router.push(`/play/${data.playerId}`);
     } catch (e: any) {
       setError(e.message ?? "Failed to join");
     } finally {
@@ -71,6 +76,16 @@ export default function JoinPage() {
       const text = await navigator.clipboard.readText();
       const cleaned = (text || "").match(/\d+/)?.[0] ?? "";
       if (cleaned) setRoomId(cleaned);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function pasteRoomCodeFromClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      const value = text.replace(/[^A-Za-z0-9]+/g, "");
+      if (value) setRoomCode(value.toUpperCase());
     } catch {
       // ignore
     }
@@ -123,6 +138,37 @@ export default function JoinPage() {
                 <button
                   type="button"
                   onClick={pasteRoomFromClipboard}
+                  className="rounded-lg px-3 py-2 bg-transparent border border-cyan-500 text-cyan-500 hover:bg-cyan-900/40 transition text-sm font-mono"
+                  title="Paste from clipboard"
+                >
+                  Paste
+                </button>
+              </div>
+            </div>
+
+            {/* Room Code */}
+            <div>
+              <label
+                className="block text-sm mb-1 text-gray-300 font-mono"
+                htmlFor="roomCode"
+              >
+                Room Code
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="roomCode"
+                  pattern="[A-Za-z0-9]*"
+                  className="flex-1 rounded-lg bg-gray-800 text-white placeholder-gray-500 px-3 py-2 outline-none border border-gray-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                  placeholder="e.g. A1B2C3"
+                  value={roomCode}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^A-Za-z0-9]+/g, "");
+                    setRoomCode(value.toUpperCase()); // force uppercase display
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={pasteRoomCodeFromClipboard}
                   className="rounded-lg px-3 py-2 bg-transparent border border-cyan-500 text-cyan-500 hover:bg-cyan-900/40 transition text-sm font-mono"
                   title="Paste from clipboard"
                 >

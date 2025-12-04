@@ -20,6 +20,7 @@ export async function GET(
       where: { roomId },
       include: {
         room: true,
+        players: true,
         trivia: {
           include: {
             questions: {
@@ -52,6 +53,7 @@ export async function GET(
         name: session.trivia.name,
       },
       questions,
+      players: session.players
     });
   } catch (err) {
     console.error("ROOM FETCH ERROR:", err);
