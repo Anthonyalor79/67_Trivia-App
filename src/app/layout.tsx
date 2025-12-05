@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Great_Vibes } from "next/font/google";
-import { Bitcount_Prop_Single } from "next/font/google";
+
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,11 +25,7 @@ const greatVibes = Great_Vibes({
   variable: "--font-great-vibes",
 });
 
-const bitcount = Bitcount_Prop_Single({
-  weight: ["400", "700"],
-  subsets: ["latin"],
-  variable: "--font-bitcount",
-});
+
 
 export default function RootLayout({
   children,
@@ -43,7 +39,7 @@ export default function RootLayout({
     ${geistSans.variable} 
     ${geistMono.variable} 
     ${greatVibes.variable}
-    ${bitcount.variable}
+    
     antialiased
   `}
       >
