@@ -5,10 +5,10 @@ const prisma = new PrismaClient();
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } } 
+  { params }: { params: Promise<{ id: string }> }
 ) {
-
-  const roomId = Number(params.id);
+  const { id } = await params;
+  const roomId = Number(id);
 
   if (isNaN(roomId)) {
     return NextResponse.json({ error: "Invalid room id" }, { status: 400 });
