@@ -48,6 +48,7 @@ export async function GET(
       roomId,
       code: session.code,
       gameStarted: session.startTime && !session.endTime ? true : false,
+      gameEnded: session.endTime ? true : false,
       gameDeleted: session.endTime ? true : false,
       questionIndex: session.currentQuestionIndex,
       trivia: {

@@ -8,7 +8,8 @@ type HistoryRoom = {
   triviaName: string;
   winnerName: string;
   winnerScore: number;
-  endedAt: string;
+  endedAt: Date | null;
+  startedAt: Date | null;
 };
 
 export default function HostDashboard({
@@ -137,7 +138,7 @@ export default function HostDashboard({
                   className="rounded-lg p-5 bg-gray-900/60 border border-cyan-700/50 hover:border-cyan-500/70 hover:bg-gray-800/50 transition"
                 >
                   <h3 className="text-lg font-semibold font-mono mb-3">
-                    Room #{h.roomId}
+                    Room #{h.roomId} - { !h.startedAt ? "Ready" : h.endedAt ? "Ended" : "Started"}
                   </h3>
 
                   {/* Card content (matches old layout style) */}
@@ -156,7 +157,7 @@ export default function HostDashboard({
                     </Row>
 
                     <Row label="Ended">
-                      {new Date(h.endedAt).toLocaleString()}
+                      {h.endedAt ? h.endedAt.toLocaleString() : "-"}
                     </Row>
 
                   </div>

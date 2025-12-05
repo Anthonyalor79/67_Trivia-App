@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
+import { start } from "repl";
 
 const prisma = new PrismaClient();
 
@@ -36,6 +37,7 @@ export async function GET() {
           winnerName: "No session",
           winnerScore: 0,
           endedAt: null,
+          startedAt: null,
         };
       }
 
@@ -55,6 +57,7 @@ export async function GET() {
         winnerName: winnerPlayer?.username ?? "No winner",
         winnerScore: winnerPlayer?.winners[0]?.score ?? 0,
         endedAt: session.endTime ?? null,
+        startedAt: session.startTime ?? null,
       };
     });
 

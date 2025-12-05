@@ -1,22 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Player } from "@prisma/client";
 
 export default function HostPage() {
+  const router = useRouter();
   const { id } = useParams<{ id: string }>();
 
   const [loading, setLoading] = useState(true);
   const [roomCode, setRoomCode] = useState<string>("");
   const [players, setPlayers] = useState<Player[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
-  const [currentIndex, setCurrentIndex] = useState<number>(-1);
+  const [currentIndex, setCurrentIndex] = useState<number | undefined>(undefined);
   const [gameStarted, setGameStarted] = useState<boolean>(false);
 
   const currentQuestion =
-    currentIndex >= 0 && currentIndex < questions.length
+    currentIndex !== undefined && currentIndex >= 0 && currentIndex < questions.length
       ? questions[currentIndex]
       : null;
 
@@ -29,21 +30,33 @@ export default function HostPage() {
         const res = await fetch(`/api/rooms/${id}`);
         const data = await res.json();
 
+        if (data.gameEnded) {
+          alert("This game has ended. Returning to rooms list.");
+          router.push(`/rooms`);
+          return;
+        } else if (data.gameDeleted) {
+          alert("This game has been deleted. Returning to rooms list.");
+          router.push(`/rooms`);
+          return;
+        } else if (data.gameStarted) {
+          alert("Game already started, resuming...");
+          setGameStarted(true);
+          const idx = data.questionIndex ?? 0;
+          setCurrentIndex(idx);
+        }
+
         setRoomCode(data.code);
         setQuestions(data.questions);
         setPlayers(data.players);
         setLoading(false);
-        if(data.gameStarted) {
-          setGameStarted(true);
-          setCurrentIndex(data.questionIndex);
-        }
       } catch (err) {
         console.error("Failed to load room:", err);
+        router.push(`/rooms`);
       }
     }
 
     loadRoom();
-  }, [id]);
+  }, [id, router]);
 
   // ------------------------------------------------------
   // Host starts the round – move from lobby to question 1
@@ -58,7 +71,16 @@ export default function HostPage() {
         method: "POST",
       });
 
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error(data?.error || "Failed to start game");
+        return;
+      }
+
       setGameStarted(true);
+      // Start at first question if not already set
+      setCurrentIndex(prev => (prev === undefined ? 0 : prev));
     } catch (err) {
       console.error("Failed to load room:", err);
     }
@@ -67,12 +89,67 @@ export default function HostPage() {
   // ------------------------------------------------------
   // Next question or finish game
   // ------------------------------------------------------
-  function handleNextQuestion() {
+  async function handleNextQuestion() {
+    if (currentIndex === undefined) {
+      console.error("No current question index set");
+      return;
+    }
+
     if (currentIndex + 1 < questions.length) {
-      setCurrentIndex(currentIndex + 1);
+      try {
+        const res = await fetch(`/api/rooms/${id}/nextQuestion`, {
+          method: "POST",
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error(data?.error || "Failed to move to next question");
+          return;
+        }
+
+        setGameStarted(true);
+        setPlayers(data.players);
+        setCurrentIndex(currentIndex + 1);
+      } catch (err) {
+        console.error("Failed to load room:", err);
+      }
     } else {
       alert("Game finished!");
-      // Later we can redirect or show leaderboard
+      await handleFinishGame();
+    }
+  }
+
+  // ------------------------------------------------------
+  // Finish game
+  // ------------------------------------------------------
+  async function handleFinishGame() {
+    try {
+      // Query the player list and select highest score as winner and app it to api endpoint
+      let winnerId: number | null = null;
+
+      if (players.length > 0) {
+        const sortedPlayers = [...players].sort((a: any, b: any) => {
+          const scoreA = a.score ?? a.totalScore ?? 0;
+          const scoreB = b.score ?? b.totalScore ?? 0;
+          return scoreB - scoreA; // descending
+        });
+
+        if (sortedPlayers[0]) {
+          winnerId = sortedPlayers[0].id;
+        }
+      }
+
+      const res = await fetch(`/api/rooms/${id}/endGame`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ winnerId }), // server can store this in Winner table
+      });
+      if (!res.ok) return console.error("Failed to end game");
+
+      router.push(`/rooms`);
+    } catch (err) {
+      console.error("Failed to load room:", err);
     }
   }
 
@@ -95,12 +172,9 @@ export default function HostPage() {
         className="w-full max-w-4xl"
       >
         <div className="rounded-lg bg-gray-900/60 border border-cyan-700/50 p-6 sm:p-8 shadow-2xl shadow-cyan-900/50">
-
-          {/* ---------------------------------------------------- */}
-          {/* Header Bar (Start Round button disappears after start) */}
-          {/* ---------------------------------------------------- */}
+          {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
-            <h1 className="text-3xl font-extrabold font-mono text-cyan-400 drop-shadow-[0_2px_4px_rgba(6,182,212,0.5)]">
+            <h1 className="text-3xl font-extrabold font-mono text-cyan-400">
               Host — Room {id}
             </h1>
 
@@ -112,12 +186,11 @@ export default function HostPage() {
                 Refresh
               </button>
 
-              {/* Only show Start Round BEFORE the first question */}
-              { !gameStarted && (
+              {!gameStarted && (
                 <button
                   type="button"
                   onClick={handleStartRound}
-                  className="rounded-lg px-5 py-2 bg-pink-600 text-white font-semibold font-mono hover:bg-pink-500 transition shadow-lg shadow-[0_0_12px_rgba(219,39,119,0.6)]"
+                  className="rounded-lg px-5 py-2 bg-pink-600 text-white font-semibold font-mono hover:bg-pink-500 transition"
                   disabled={gameStarted}
                 >
                   Start Round
@@ -126,9 +199,7 @@ export default function HostPage() {
             </div>
           </div>
 
-          {/* ---------------------------------------------------- */}
-          {/* Room Info + Players List                            */}
-          {/* ---------------------------------------------------- */}
+          {/* Room + Players */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="rounded-lg bg-gray-800/70 p-5">
               <h2 className="font-semibold mb-3 font-mono text-gray-300">
@@ -146,10 +217,12 @@ export default function HostPage() {
               <h2 className="font-semibold mb-3 font-mono text-gray-300">
                 Players
               </h2>
-             {players && players.length > 0 ? (
+              {players && players.length > 0 ? (
                 <ul className="font-mono text-sm text-gray-300 divide-y divide-gray-700">
                   {players.map((p) => (
-                    <li key={p.id} className="py-1">{p.username}</li>
+                    <li key={p.id} className="py-1">
+                      {p.username} - {p.score}
+                    </li>
                   ))}
                 </ul>
               ) : (
@@ -158,9 +231,7 @@ export default function HostPage() {
             </div>
           </div>
 
-          {/* ---------------------------------------------------- */}
-          {/* BEFORE ROUND STARTS → show only instruction message  */}
-          {/* ---------------------------------------------------- */}
+          {/* Lobby vs Game */}
           {!gameStarted ? (
             <div className="mt-10 text-center">
               <p className="text-lg font-mono text-gray-300">
@@ -169,16 +240,14 @@ export default function HostPage() {
             </div>
           ) : (
             <>
-              {/* ------------------------------------------------ */}
-              {/* Active Question UI                               */}
-              {/* ------------------------------------------------ */}
               <div className="mt-6 rounded-lg bg-gray-800/70 p-5">
                 <h2 className="font-semibold mb-3 font-mono text-gray-300">
                   Current Question
                 </h2>
 
                 <h3 className="text-xl font-bold text-cyan-300 mb-3">
-                  Question {currentIndex + 1} of {questions.length}
+                  Question{" "}
+                  {currentIndex !== undefined ? currentIndex + 1 : "-"} of {questions.length}
                 </h3>
 
                 <p className="text-gray-200 text-lg mb-4">
@@ -186,7 +255,7 @@ export default function HostPage() {
                 </p>
 
                 <ul className="space-y-2">
-                  {currentQuestion?.options.map((opt: any) => (
+                  {currentQuestion?.options?.map((opt: any) => (
                     <li
                       key={opt.id}
                       className="px-4 py-2 rounded bg-gray-700/60 border border-gray-500/40 text-gray-200 font-mono"
@@ -196,12 +265,11 @@ export default function HostPage() {
                   ))}
                 </ul>
 
-                {/* Next Question or Finish */}
                 <button
                   onClick={handleNextQuestion}
                   className="mt-6 rounded-lg px-5 py-2 bg-pink-600 text-white font-semibold font-mono hover:bg-pink-500 transition"
                 >
-                  {currentIndex + 1 < questions.length
+                  {currentIndex !== undefined && currentIndex + 1 < questions.length
                     ? "Next Question"
                     : "Finish Game"}
                 </button>
