@@ -1,11 +1,11 @@
 // join/page.tsx (Join Page)
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
-export default function JoinPage() {
+function JoinPageInner() {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -44,11 +44,11 @@ export default function JoinPage() {
       const res = await fetch(`/api/rooms/${roomId}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           displayName: name.trim(),
           roomId: Number(roomId.trim()),
           roomCode: roomCode.trim(),
-         }),
+        }),
       });
       const data = await res.json();
       if (!res.ok)
@@ -93,7 +93,7 @@ export default function JoinPage() {
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen px-6 text-white bg-gradient-to-b from-black via-indigo-900 to-purple-900">
-    <motion.div
+      <motion.div
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
@@ -130,7 +130,6 @@ export default function JoinPage() {
                   placeholder="e.g. 123"
                   value={roomId}
                   onChange={(e) => {
-                    // keep only digits
                     const digits = e.target.value.replace(/\D+/g, "");
                     setRoomId(digits);
                   }}
@@ -163,7 +162,7 @@ export default function JoinPage() {
                   value={roomCode}
                   onChange={(e) => {
                     const value = e.target.value.replace(/[^A-Za-z0-9]+/g, "");
-                    setRoomCode(value.toUpperCase()); // force uppercase display
+                    setRoomCode(value.toUpperCase());
                   }}
                 />
                 <button
@@ -222,5 +221,13 @@ export default function JoinPage() {
         </div>
       </motion.div>
     </main>
+  );
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={null}>
+      <JoinPageInner />
+    </Suspense>
   );
 }

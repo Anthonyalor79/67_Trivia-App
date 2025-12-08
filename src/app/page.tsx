@@ -50,7 +50,7 @@ export default function LandingPage() {
             {/* TRIVIA */}
             <div
               className="
-                flex gap-2
+                flex gap-[1px]
                 text-8xl sm:text-9xl tracking-[0.05em]
                 font-bitcount
                 text-cyan-300
@@ -88,7 +88,7 @@ export default function LandingPage() {
 
         <motion.p
           variants={itemVariants}
-          className="text-lg text-gray-300 mb-10 text-center max-w-md font-mono"
+          className="text-lg text-gray-300 mb-20 text-center max-w-md font-mono"
         >
           Challenge your friends and test your knowledge in real time!
         </motion.p>

@@ -1,5 +1,5 @@
 // Convert any bigint fields to Number so NextResponse.json can serialize.
-export function toSerializable<T>(data: T): any {
+export function toSerializable<T>(data: T): unknown {
   return JSON.parse(
     JSON.stringify(data, (_k, v) => (typeof v === "bigint" ? Number(v) : v))
   );
