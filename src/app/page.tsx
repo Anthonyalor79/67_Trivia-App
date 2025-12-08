@@ -28,9 +28,16 @@ export default function LandingPage() {
   const router = useRouter();
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen px-6 text-white bg-gradient-to-b from-black via-indigo-900 to-purple-900">
+    <main className="relative flex flex-col items-center justify-center min-h-screen px-6 text-white bg-gradient-to-b from-black via-indigo-900 to-purple-900 overflow-hidden">
+      <div
+        className="absolute inset-0 bg-center bg-no-repeat bg-cover opacity-85 z-0"
+        style={{
+          backgroundImage: "url('Tap-Background.svg')",
+           backgroundPosition: "center 5%" 
+        }}
+      />
       <motion.div
-        className="flex flex-col items-center justify-center"
+        className="relative z-10 flex flex-col items-center justify-center"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
@@ -38,7 +45,8 @@ export default function LandingPage() {
         <motion.div variants={itemVariants}>
           <h1 className="sr-only">Tap Tap Trivia</h1>
 
-          <div className="flex flex-col items-center mt-10">
+          <div className="flex flex-col items-center -mt-24 sm:-mt-32">
+
             {/* TRIVIA */}
             <div
               className="
@@ -62,17 +70,19 @@ export default function LandingPage() {
 
             {/* night */}
             <span
-              className={`
-                
-                mt-3 text-4xl sm:text-5xl italic
+              className="
+                mt-[-15px] ml-24 sm:ml-72
+                rotate-[-12deg]
+                text-4xl sm:text-5xl italic
                 font-greatvibes
                 text-pink-500
                 drop-shadow-[0_0_20px_rgba(236,72,153,0.95)]
                 animate-[neonFlicker_1.8s_ease-in-out_infinite]
-              `}
+              "
             >
-              Night
+              night
             </span>
+
           </div>
         </motion.div>
 
