@@ -12,13 +12,18 @@ export async function POST(
   const numericPlayerId = Number(playerId);
 
   if (!Number.isInteger(numericPlayerId)) {
-    return NextResponse.json({ error: "Invalid playerId" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid playerId" },
+      { status: 400 }
+    );
   }
 
   let body: {
     roundId?: number;
     selectedOptionId?: number;
-    responseTimeMilliseconds?: number;
+    // now client-driven:
+    isCorrect?: boolean;
+    scoreDelta?: number;
   };
 
   try {
@@ -30,11 +35,26 @@ export async function POST(
     );
   }
 
-  const { roundId, selectedOptionId } = body;
+  const { roundId, selectedOptionId, isCorrect, scoreDelta } = body;
 
   if (!roundId || !selectedOptionId) {
     return NextResponse.json(
       { error: "roundId and selectedOptionId are required" },
+      { status: 400 }
+    );
+  }
+
+  if (typeof scoreDelta !== "number" || !Number.isFinite(scoreDelta)) {
+    return NextResponse.json(
+      { error: "scoreDelta must be a finite number" },
+      { status: 400 }
+    );
+  }
+
+  // guard against trolling
+  if (scoreDelta < 0 || scoreDelta > 1000) {
+    return NextResponse.json(
+      { error: "scoreDelta out of allowed range" },
       { status: 400 }
     );
   }
@@ -72,29 +92,24 @@ export async function POST(
       );
     }
 
-    // 3) Check if this option is correct by looking in Answer table
-    const correctAnswer = await prisma.answer.findFirst({
-      where: { optionId: selectedOptionId },
-    });
-
-    const isCorrect = !!correctAnswer;
-
     let updatedPlayer = player;
 
-    if (isCorrect) {
-      // 4) Update the player score. Adjust the increment value to whatever you want.
+    // 3) Only change score if there is a positive delta
+    if (scoreDelta > 0) {
       updatedPlayer = await prisma.player.update({
         where: { id: numericPlayerId },
         data: {
           score: {
-            increment: 100, // e.g. +100 points for a correct answer
+            increment: scoreDelta,
           },
         },
       });
     }
 
     return NextResponse.json({
-      correct: isCorrect,
+      success: true,
+      correct: !!isCorrect,
+      added: scoreDelta,
       newScore: updatedPlayer.score,
     });
   } catch (err) {

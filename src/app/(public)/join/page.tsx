@@ -9,56 +9,56 @@ function JoinPageInner() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const [roomId, setRoomId] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [name, setName] = useState("");
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const r = params.get("room");
-    const n = params.get("name");
-    if (r) setRoomId(r);
-    if (n) setName(n);
+    // Support both ?code= and ?room= just in case
+    const roomCode = params.get("code");
+    if (roomCode) setRoomCode(roomCode);
   }, [params]);
 
-  const errs = useMemo(() => {
+  const validationErrors = useMemo(() => {
     const list: string[] = [];
-    if (!roomId.trim()) list.push("Room ID is required.");
-    if (roomId && !/^\d+$/.test(roomId.trim()))
-      list.push("Room ID must be a number.");
     if (!name.trim()) list.push("Display name is required.");
-    if (name.trim().length > 32)
+    if (name.trim().length > 32) {
       list.push("Display name must be 32 characters or less.");
+    }
     return list;
-  }, [roomId, name]);
+  }, [name]);
 
   async function join() {
-    if (errs.length) {
-      setError(errs[0]);
+    if (validationErrors.length) {
+      setError(validationErrors[0]);
       return;
     }
     setJoining(true);
     setError(null);
     try {
-      const res = await fetch(`/api/rooms/${roomId}/join`, {
+      const response = await fetch(`/api/rooms/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           displayName: name.trim(),
-          roomId: Number(roomId.trim()),
           roomCode: roomCode.trim(),
         }),
       });
-      const data = await res.json();
-      if (!res.ok)
+      const data = await response.json();
+      if (!response.ok) {
         throw new Error(
           typeof data?.error === "string" ? data.error : "Failed to join"
         );
-      sessionStorage.setItem("playerId", data.playerId);
+      }
+      sessionStorage.setItem("playerId", String(data.playerId));
       router.push(`/play/${data.playerId}`);
-    } catch (e: any) {
-      setError(e.message ?? "Failed to join");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setError(error.message ?? "Failed to join");
+      } else {
+        setError("Failed to join");
+      }
     } finally {
       setJoining(false);
     }
@@ -68,16 +68,6 @@ function JoinPageInner() {
     if (e.key === "Enter") {
       e.preventDefault();
       void join();
-    }
-  }
-
-  async function pasteRoomFromClipboard() {
-    try {
-      const text = await navigator.clipboard.readText();
-      const cleaned = (text || "").match(/\d+/)?.[0] ?? "";
-      if (cleaned) setRoomId(cleaned);
-    } catch {
-      // ignore
     }
   }
 
@@ -113,38 +103,6 @@ function JoinPageInner() {
           )}
 
           <form className="space-y-4" onKeyDown={onKeyDown}>
-            {/* Room ID */}
-            <div>
-              <label
-                className="block text-sm mb-1 text-gray-300 font-mono"
-                htmlFor="room"
-              >
-                Room ID
-              </label>
-              <div className="flex gap-2">
-                <input
-                  id="room"
-                  inputMode="numeric"
-                  pattern="\d*"
-                  className="flex-1 rounded-lg bg-gray-800 text-white placeholder-gray-500 px-3 py-2 outline-none border border-gray-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transform transition-transform duration-200 hover:scale-105"
-                  placeholder="e.g. 123"
-                  value={roomId}
-                  onChange={(e) => {
-                    const digits = e.target.value.replace(/\D+/g, "");
-                    setRoomId(digits);
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={pasteRoomFromClipboard}
-                  className="rounded-lg px-3 py-2 bg-transparent border border-cyan-500 text-cyan-500 hover:bg-cyan-900/40 transition text-sm font-mono"
-                  title="Paste from clipboard"
-                >
-                  Paste
-                </button>
-              </div>
-            </div>
-
             {/* Room Code */}
             <div>
               <label

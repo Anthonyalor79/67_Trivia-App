@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Player as PrismaPlayer } from "@prisma/client"; // just for clarity, you can keep it as Player
+import type { Player as PrismaPlayer } from "@prisma/client";
 
 type State = {
   roomId: number | null;
@@ -23,6 +23,7 @@ type State = {
       id: number;
       text: string;
     }[];
+    correctOptionIds: number[]; 
   }[] | null;
   players: PrismaPlayer[] | null;
 };
@@ -38,6 +39,38 @@ const EMPTY_STATE: State = {
   questions: null,
   players: null,
 };
+
+// timer configuration (client-only)
+const QUESTION_DURATION_SECONDS: number = 20;
+
+const BASE_POINTS_PER_CORRECT = 100;
+const MAX_BONUS_POINTS = 50;
+
+function computeScoreDelta(
+  isCorrect: boolean,
+  remainingSeconds: number | null
+): number {
+  if (!isCorrect) {
+    return 0;
+  }
+  if (remainingSeconds === null || remainingSeconds <= 0) {
+    return BASE_POINTS_PER_CORRECT;
+  }
+
+  const safeRemainingSeconds = Math.max(
+    0,
+    Math.min(remainingSeconds, QUESTION_DURATION_SECONDS)
+  );
+
+  const speedFactor =
+    QUESTION_DURATION_SECONDS === 0
+      ? 0
+      : safeRemainingSeconds / QUESTION_DURATION_SECONDS;
+
+  const bonusPoints = Math.round(MAX_BONUS_POINTS * speedFactor);
+
+  return BASE_POINTS_PER_CORRECT + bonusPoints;
+}
 
 // HELPER: Color definitions for the 4 buttons (Cyberpunk/Neon palette)
 const OPTION_COLORS = [
@@ -80,7 +113,11 @@ export default function PlayPage() {
   );
   const [error, setError] = useState<string | null>(null);
 
-  const [roundStartTimestamp] = useState<number | null>(null); // kept for future timer use
+  // timer state
+  const [questionStartTimestamp, setQuestionStartTimestamp] = useState<number | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+
+  // track last question id to detect question changes
   const lastQuestionIdRef = useRef<number | null>(null);
 
   // Derive current question from state
@@ -94,6 +131,21 @@ export default function PlayPage() {
 
   const joinedCount = players?.length ?? 0;
 
+  const isTimeUp =
+    remainingSeconds !== null && remainingSeconds <= 0;
+
+  type AnswerFeedback = {
+    questionId: number;
+    selectedOptionId: number;
+    isCorrect: boolean;
+    scoreDelta: number;
+  };
+
+  const [answerFeedback, setAnswerFeedback] = useState<AnswerFeedback | null>(
+    null
+  );
+
+
   // ------------------------------------------------------
   // Initial Fetch state from backend
   // ------------------------------------------------------
@@ -102,12 +154,12 @@ export default function PlayPage() {
 
     async function fetchState() {
       try {
-        const res = await fetch(`/api/players/${playerIdFromUrl}/state`, {
+        const response = await fetch(`/api/players/${playerIdFromUrl}/state`, {
           cache: "no-store",
         });
-        if (!res.ok) return;
+        if (!response.ok) return;
 
-        const data: State = await res.json();
+        const data: State = await response.json();
         setState(data);
         setPlayers(data.players);
 
@@ -124,41 +176,40 @@ export default function PlayPage() {
     }
 
     fetchState();
-    // If you want live updates again, uncomment:
-    // const timer = setInterval(fetchState, 1000);
-    // return () => clearInterval(timer);
+    // If you want full state polling again, you can re-enable here.
   }, [playerIdFromUrl, router]);
 
   // lightweight polling for just live changes
   useEffect(() => {
     if (!playerIdFromUrl) return;
+    if (state.gameEnded) return;
 
     let isCancelled = false;
-    let timer: NodeJS.Timeout | null = null;
+    let timerIdentifier: NodeJS.Timeout | null = null;
 
     async function pollLiveState() {
       try {
-        const res = await fetch(`/api/players/${playerIdFromUrl}/live`, {
+        const response = await fetch(`/api/players/${playerIdFromUrl}/live`, {
           cache: "no-store",
         });
-        if (!res.ok) return;
+        if (!response.ok) return;
 
         const data: {
           gameStarted: boolean;
           gameEnded: boolean;
           questionIndex: number;
           players: { id: number; username: string; score: number }[];
-        } = await res.json();
+        } = await response.json();
 
         if (isCancelled) return;
 
         // merge into existing state (do not touch questions/trivia)
-        setState((prev) => ({
-          ...prev,
+        setState((previousState) => ({
+          ...previousState,
           gameStarted: data.gameStarted,
           gameEnded: data.gameEnded,
           questionIndex: data.questionIndex,
-          players: data.players as any, // or adjust your State type to match
+          players: data.players as any,
         }));
 
         setPlayers(data.players as any);
@@ -169,34 +220,103 @@ export default function PlayPage() {
           ? "Started"
           : "Ready";
         setGameStatus(status);
-      } catch (err) {
+      } catch (caughtError) {
         if (isCancelled) return;
-        console.error("Poll live state failed:", err);
-        // you can decide if you want to kick them out or just ignore
+        console.error("Poll live state failed:", caughtError);
       }
     }
 
     // initial poll
     pollLiveState();
     // poll every second
-    timer = setInterval(pollLiveState, 1000);
+    timerIdentifier = setInterval(pollLiveState, 1000);
 
     return () => {
       isCancelled = true;
-      if (timer) clearInterval(timer);
+      if (timerIdentifier) clearInterval(timerIdentifier);
     };
-  }, [playerIdFromUrl]);
+  }, [playerIdFromUrl, state]);
 
   // Kick out if no player id
   useEffect(() => {
     if (!playerIdFromUrl) {
-      const timeoutId = setTimeout(() => router.push("/join"), 1500);
-      return () => clearTimeout(timeoutId);
+      const timeoutIdentifier = setTimeout(() => router.push("/join"), 1500);
+      return () => clearTimeout(timeoutIdentifier);
     }
   }, [playerIdFromUrl, router]);
 
   // ------------------------------------------------------
-  // Answer a question
+  // Detect question changes and start local timer
+  // ------------------------------------------------------
+  useEffect(() => {
+    if (!state.gameStarted || !state.questions || state.questions.length === 0) {
+      return;
+    }
+
+    const nextCurrentQuestion =
+      state.questions &&
+      state.questions.length > 0 &&
+      state.questionIndex >= 0 &&
+      state.questionIndex < state.questions.length
+        ? state.questions[state.questionIndex]
+        : null;
+
+    if (!nextCurrentQuestion) {
+      return;
+    }
+
+    if (lastQuestionIdRef.current !== nextCurrentQuestion.id) {
+      // new question detected → reset timer
+      lastQuestionIdRef.current = nextCurrentQuestion.id;
+      const now = Date.now();
+      setQuestionStartTimestamp(now);
+      setRemainingSeconds(QUESTION_DURATION_SECONDS);
+
+      // clear any old feedback
+      setAnswerFeedback(null);
+
+      // also clear "answered" state for this new question
+      setAnsweredQuestionIds((previousSet) => {
+        const nextSet = new Set(previousSet);
+        nextSet.delete(nextCurrentQuestion.id);
+        return nextSet;
+      });
+    }
+  }, [state.gameStarted, state.questionIndex, state.questions]);
+
+
+  // ------------------------------------------------------
+  // Local countdown timer
+  // ------------------------------------------------------
+  useEffect(() => {
+    if (!state.gameStarted || questionStartTimestamp === null) {
+      return;
+    }
+
+    setRemainingSeconds((previousRemainingSeconds) =>
+      previousRemainingSeconds === null
+        ? QUESTION_DURATION_SECONDS
+        : previousRemainingSeconds
+    );
+
+    const intervalIdentifier = setInterval(() => {
+      const elapsedSeconds = Math.floor(
+        (Date.now() - questionStartTimestamp) / 1000
+      );
+      const nextRemainingSeconds =
+        QUESTION_DURATION_SECONDS - elapsedSeconds;
+      setRemainingSeconds(
+        nextRemainingSeconds > 0 ? nextRemainingSeconds : 0
+      );
+    }, 500);
+
+    return () => {
+      clearInterval(intervalIdentifier);
+    };
+  }, [state.gameStarted, questionStartTimestamp]);
+
+  // ------------------------------------------------------
+  // Answer a question (with time-based scoring support)
   // ------------------------------------------------------
   async function answer(selectedOptionId: number) {
     if (!playerIdFromUrl) return;
@@ -205,36 +325,88 @@ export default function PlayPage() {
     const questionId = currentQuestion.id;
     if (answeredQuestionIds.has(questionId)) return;
 
+    // prevent answering when time is up
+    if (remainingSeconds !== null && remainingSeconds <= 0) {
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
     try {
-      const responseTimeMilliseconds = 1000;
+      // 1. decide if the answer is correct on the client
+      const isCorrect = currentQuestion.correctOptionIds.includes(
+        selectedOptionId
+      );
 
-      const res = await fetch(
+      // 2. compute the score delta using correctness + timer
+      const scoreDelta = computeScoreDelta(isCorrect, remainingSeconds);
+
+      const requestBody = {
+        roundId: questionId,
+        selectedOptionId,
+        isCorrect,
+        scoreDelta,
+      };
+
+      const response = await fetch(
         `/api/players/${playerIdFromUrl}/updateScore`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            roundId: questionId,
-            selectedOptionId,
-            responseTimeMilliseconds,
-          }),
+          body: JSON.stringify(requestBody),
         }
       );
 
-      if (!res.ok) throw new Error("Failed to submit answer");
+      if (!response.ok) {
+        throw new Error("Failed to submit answer");
+      }
 
-      const data = await res.json();
-      // If you want, you can read data.correct / data.newScore here
+      const data = await response.json();
+
       // mark this question as answered
-      setAnsweredQuestionIds(prev => new Set([...prev, questionId]));
+      // mark this question as answered
+      setAnsweredQuestionIds((previousSet) => {
+        const nextSet = new Set(previousSet);
+        nextSet.add(questionId);
+        return nextSet;
+      });
 
-      // allow future questions to be answered
+      // store visual feedback for this question
+      setAnswerFeedback({
+        questionId,
+        selectedOptionId,
+        isCorrect,
+        scoreDelta,
+      });
+
+
+      // mark this question as answered
+      setAnsweredQuestionIds((previousSet) => {
+        const nextSet = new Set(previousSet);
+        nextSet.add(questionId);
+        return nextSet;
+      });
+
+      // optional: optimistic update player score locally so leaderboard feels instant
+      if (scoreDelta > 0 && players) {
+        setPlayers((previousPlayers) => {
+          if (!previousPlayers) return previousPlayers;
+          return previousPlayers.map((player) =>
+            String(player.id) === String(playerIdFromUrl)
+              ? { ...player, score: player.score + scoreDelta }
+              : player
+          );
+        });
+      }
+
       setSubmitting(false);
-    } catch (e: any) {
-      setError(e.message ?? "Failed to submit answer");
+    } catch (caughtError: unknown) {
+      if (caughtError instanceof Error) {
+        setError(caughtError.message ?? "Failed to submit answer");
+      } else {
+        setError("Failed to submit answer");
+      }
       setSubmitting(false);
     }
   }
@@ -244,20 +416,28 @@ export default function PlayPage() {
   // Keyboard support (1–4 for options)
   // ------------------------------------------------------
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
+    function onKey(event: KeyboardEvent) {
       if (!currentQuestion) return;
-      if (submitting || answeredQuestionIds.has(currentQuestion.id)) return;
+      if (
+        submitting ||
+        answeredQuestionIds.has(currentQuestion.id) ||
+        (remainingSeconds !== null && remainingSeconds <= 0)
+      ) {
+        return;
+      }
 
-      const index = parseInt(e.key, 10);
+      const index = parseInt(event.key, 10);
       if (!Number.isFinite(index)) return;
 
       const option = currentQuestion.options[index - 1];
-      if (option) answer(option.id);
+      if (option) {
+        void answer(option.id);
+      }
     }
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [currentQuestion, submitting, answeredQuestionIds]);
+  }, [currentQuestion, submitting, answeredQuestionIds, remainingSeconds]);
 
   return (
     <main className="h-screen w-full flex flex-col items-center justify-center text-white bg-gradient-to-b from-black via-indigo-900 to-purple-900 overflow-hidden">
@@ -337,61 +517,66 @@ export default function PlayPage() {
             <h3 className="font-bold font-mono text-gray-200 text-lg uppercase tracking-wider">
               Current Question
             </h3>
+
+            {/* Timer display */}
+            {gameStatus === "Started" && remainingSeconds !== null && (
+              <p
+                className={`font-mono text-sm ${
+                  remainingSeconds <= 5 ? "text-red-400" : "text-gray-300"
+                }`}
+              >
+                Time left: {remainingSeconds}s
+              </p>
+            )}
           </div>
 
-          { gameStatus === "Ended" ? (
-  <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
-
-    {/* Animated Icon */}
-    <motion.div
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.6 }}
-      className="w-28 h-28 rounded-full border-4 border-pink-600
+          {gameStatus === "Ended" ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.6 }}
+                className="w-28 h-28 rounded-full border-4 border-pink-600
                  flex items-center justify-center shadow-[0_0_25px_rgba(236,72,153,0.6)]"
-    >
-      <span className="text-4xl font-mono text-pink-400 drop-shadow-[0_0_6px_rgba(236,72,153,0.8)]">
-        ✦
-      </span>
-    </motion.div>
+              >
+                <span className="text-4xl font-mono text-pink-400 drop-shadow-[0_0_6px_rgba(236,72,153,0.8)]">
+                  ✦
+                </span>
+              </motion.div>
 
-    {/* Title */}
-    <motion.h2
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.2, duration: 0.5 }}
-      className="text-3xl sm:text-4xl font-extrabold font-mono text-pink-400
+              <motion.h2
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.5 }}
+                className="text-3xl sm:text-4xl font-extrabold font-mono text-pink-400
                  drop-shadow-[0_0_12px_rgba(236,72,153,0.7)]"
-    >
-      The Game Has Ended
-    </motion.h2>
+              >
+                The Game Has Ended
+              </motion.h2>
 
-    {/* Subtitle */}
-    <motion.p
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.35, duration: 0.5 }}
-      className="text-gray-300 font-mono text-lg max-w-md leading-relaxed"
-    >
-      Thank you for playing!  
-      Waiting for the host to start a new game or return to the lobby.
-    </motion.p>
+              <motion.p
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35, duration: 0.5 }}
+                className="text-gray-300 font-mono text-lg max-w-md leading-relaxed"
+              >
+                Thank you for playing!  
+                Waiting for the host to start a new game or return to the lobby.
+              </motion.p>
 
-    {/* Button */}
-    <motion.button
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.5, duration: 0.5 }}
-      onClick={() => router.push("/rooms")}
-      className="mt-4 px-6 py-3 rounded-xl bg-pink-600 hover:bg-pink-500
+              <motion.button
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5, duration: 0.5 }}
+                onClick={() => router.push("/rooms")}
+                className="mt-4 px-6 py-3 rounded-xl bg-pink-600 hover:bg-pink-500
                  border border-pink-400 text-white font-mono text-lg
                  shadow-[0_0_15px_rgba(236,72,153,0.6)] transition"
-    >
-      Return to Rooms
-    </motion.button>
-
-  </div>
-) : gameStatus === "Ready" || !currentQuestion ? (
+              >
+                Return to Rooms
+              </motion.button>
+            </div>
+          ) : gameStatus === "Ready" || !currentQuestion ? (
             <div className="flex-1 flex flex-col items-center justify-center space-y-4 animate-pulse">
               <div className="w-16 h-16 rounded-full border-4 border-gray-700 border-t-cyan-500 animate-spin" />
               <p className="text-gray-400 font-mono text-xl">
@@ -416,65 +601,141 @@ export default function PlayPage() {
 
                 {/* Options grid */}
                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4">
-                  {currentQuestion.options.map((option, index) => {
-                    const locked =
-                      submitting ||
-                      answeredQuestionIds.has(currentQuestion.id);
+                {currentQuestion.options.map((option, index) => {
+                  const isAnswered = answeredQuestionIds.has(currentQuestion.id);
+                  const locked =
+                    submitting || isAnswered || isTimeUp;
 
-                    const colorStyle = OPTION_COLORS[index % 4];
+                  const colorStyle = OPTION_COLORS[index % 4];
 
-                    return (
-                      <button
-                        key={option.id}
-                        disabled={locked}
-                        onClick={() => answer(option.id)}
+                  const isCorrectOption = currentQuestion.correctOptionIds.includes(
+                    option.id
+                  );
+
+                  const isSelectedOption =
+                    answerFeedback &&
+                    answerFeedback.questionId === currentQuestion.id &&
+                    answerFeedback.selectedOptionId === option.id;
+
+                  const shouldRevealCorrect =
+                    isAnswered || isTimeUp;
+
+                  let buttonStyleClasses = "";
+                  let textStyleClasses = "";
+
+                  if (shouldRevealCorrect && isCorrectOption) {
+                    // highlight correct answer in green
+                    buttonStyleClasses =
+                      "bg-green-900/70 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.6)]";
+                    textStyleClasses = "text-green-100";
+                  } else if (shouldRevealCorrect && isSelectedOption && !isCorrectOption) {
+                    // highlight wrong chosen answer in red
+                    buttonStyleClasses =
+                      "bg-red-900/70 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.6)]";
+                    textStyleClasses = "text-red-100";
+                  } else if (locked) {
+                    // other locked options
+                    buttonStyleClasses =
+                      "bg-gray-800/80 border-gray-600 opacity-60 cursor-not-allowed grayscale";
+                    textStyleClasses = "text-gray-400";
+                  } else {
+                    // normal clickable state
+                    buttonStyleClasses = `${colorStyle.base} ${colorStyle.hover} active:scale-95`;
+                    textStyleClasses = "text-white";
+                  }
+
+                  return (
+                    <button
+                      key={option.id}
+                      disabled={locked}
+                      onClick={() => answer(option.id)}
+                      className={`
+                        group relative h-full w-full rounded-2xl border-2 p-6 transition-all duration-200
+                        flex flex-col items-center justify-center text-center shadow-lg
+                        ${buttonStyleClasses}
+                      `}
+                    >
+                      <div
                         className={`
-                          group relative h-full w-full rounded-2xl border-2 p-6 transition-all duration-200
-                          flex flex-col items-center justify-center text-center shadow-lg
+                          absolute top-4 left-4 text-xs font-black font-mono px-2 py-1 rounded opacity-70
                           ${
                             locked
-                              ? "bg-gray-800/80 border-gray-600 opacity-50 cursor-not-allowed grayscale"
-                              : `${colorStyle.base} ${colorStyle.hover} active:scale-95`
+                              ? "bg-gray-700 text-gray-400"
+                              : "bg-black/30 " + colorStyle.icon
                           }
                         `}
                       >
-                        <div
-                          className={`
-                            absolute top-4 left-4 text-xs font-black font-mono px-2 py-1 rounded opacity-70
-                            ${
-                              locked
-                                ? "bg-gray-700 text-gray-400"
-                                : "bg-black/30 " + colorStyle.icon
-                            }
-                          `}
-                        >
-                          {index + 1}
-                        </div>
+                        {index + 1}
+                      </div>
 
-                        <span
-                          className={`text-xl sm:text-2xl font-bold font-sans tracking-wide ${
-                            locked ? "text-gray-400" : "text-white"
-                          }`}
-                        >
-                          {option.text}
-                        </span>
-                      </button>
-                    );
-                  })}
+                      <span
+                        className={`text-xl sm:text-2xl font-bold font-sans tracking-wide ${textStyleClasses}`}
+                      >
+                        {option.text}
+                      </span>
+                    </button>
+                  );
+                })}
+
                 </div>
 
                 {/* Footer status */}
-                <div className="h-8 shrink-0 flex items-center justify-center">
-                  {answeredQuestionIds.has(currentQuestion.id) && (
-                    <motion.p
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-green-400 font-mono font-bold bg-green-900/30 px-4 py-1 rounded-full border border-green-800"
-                    >
-                      Answer submitted!
-                    </motion.p>
-                  )}
+                <div className="min-h-8 shrink-0 flex items-center justify-center">
+                  {answerFeedback &&
+                    answerFeedback.questionId === currentQuestion.id && (
+                      <motion.p
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`font-mono font-bold px-4 py-1 rounded-full border ${
+                          answerFeedback.isCorrect
+                            ? "text-green-300 bg-green-900/30 border-green-800"
+                            : "text-red-300 bg-red-900/30 border-red-800"
+                        }`}
+                      >
+                        {answerFeedback.isCorrect ? (
+                          <>
+                            Correct! +{answerFeedback.scoreDelta} points.
+                          </>
+                        ) : (
+                          <>
+                            Nice try! Correct answer
+                            {currentQuestion.correctOptionIds.length > 1 ? "s" : ""}:{" "}
+                            <span className="underline">
+                              {currentQuestion.options
+                                .filter((option) =>
+                                  currentQuestion.correctOptionIds.includes(option.id)
+                                )
+                                .map((option) => option.text)
+                                .join(", ")}
+                            </span>
+                          </>
+                        )}
+                      </motion.p>
+                    )}
+
+                  {isTimeUp &&
+                    !answeredQuestionIds.has(currentQuestion.id) &&
+                    (!answerFeedback ||
+                      answerFeedback.questionId !== currentQuestion.id) && (
+                      <motion.p
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-red-300 font-mono font-bold bg-red-900/30 px-4 py-1 rounded-full border border-red-800"
+                      >
+                        Time is up. Correct answer
+                        {currentQuestion.correctOptionIds.length > 1 ? "s" : ""}:{" "}
+                        <span className="underline">
+                          {currentQuestion.options
+                            .filter((option) =>
+                              currentQuestion.correctOptionIds.includes(option.id)
+                            )
+                            .map((option) => option.text)
+                            .join(", ")}
+                        </span>
+                      </motion.p>
+                    )}
                 </div>
+
               </motion.div>
             </AnimatePresence>
           )}

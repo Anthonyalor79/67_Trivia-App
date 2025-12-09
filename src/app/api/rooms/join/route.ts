@@ -4,15 +4,8 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  request: NextRequest
 ) {
-  const { id } = await context.params;
-  const roomIdFromPath = Number(id);
-
-  if (isNaN(roomIdFromPath)) {
-    return NextResponse.json({ error: "Invalid room ID" }, { status: 400 });
-  }
 
   let body: {
     displayName?: string;
@@ -36,19 +29,10 @@ export async function POST(
     );
   }
 
-  // Optional: ensure body.roomId matches the path
-  if (body.roomId && body.roomId !== roomIdFromPath) {
-    return NextResponse.json(
-      { error: "Room ID mismatch" },
-      { status: 400 }
-    );
-  }
-
   try {
     // 1) Find a session for this room + code
     const session = await prisma.session.findFirst({
       where: {
-        roomId: roomIdFromPath,
         code: roomCode,
         endTime: null,
       },
