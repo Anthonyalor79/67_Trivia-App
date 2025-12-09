@@ -21,6 +21,7 @@ export default function HostDashboard({
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
+  console.log("Admin:", admin);
   async function refresh() {
     setErr(null);
     setLoading(true);
